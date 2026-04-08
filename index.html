@@ -2,63 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>AR Sky Tracker - Labels & Target Lock</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AR Sky Tracker</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; }
-canvas { display:block; }
-
-/* UI Panels */
-.panel {
-  position:fixed; background:rgba(0,10,30,0.9);
-  border:1px solid rgba(0,180,255,0.22); border-radius:12px;
-  padding:12px 16px; backdrop-filter:blur(8px);
-  box-shadow:0 0 20px rgba(0,80,200,0.14); min-width:220px; z-index: 10;
-}
-.panel h1 { font-size:11px; letter-spacing:2px; margin-bottom:8px;
-            padding-bottom:6px; border-bottom:1px solid rgba(0,180,255,0.18); }
+* { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
+body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; -webkit-user-select:none; }
+canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1; }
+.panel { position:fixed; background:rgba(0,10,30,0.9); border:1px solid rgba(0,180,255,0.22); border-radius:12px; padding:12px 16px; box-shadow:0 0 20px rgba(0,80,200,0.14); z-index:100; min-width:220px; }
+.panel h1 { font-size:11px; letter-spacing:2px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(0,180,255,0.18); color:#ff9900; }
 .row { display:flex; justify-content:space-between; padding:4px 0; font-size:10px; }
-.lbl { color:#3d7a9a; }
-.val { color:#eee; font-weight:bold; }
-
+.lbl { color:#3d7a9a; } .val { color:#eee; font-weight:bold; }
 #pa { top:env(safe-area-inset-top, 20px); left:15px; }
-#pa h1 { color:#ff9900; }
-
-/* Controls */
-#controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:20; }
-.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4);
-       border-radius:10px; color:#fff; font-family:inherit;
-       font-size:11px; padding:14px; cursor:pointer; min-width:180px; text-align:center; }
-.btn-ar { background: #004488; border-color: #00eeff; font-weight: bold; }
-
-#compass {
-  position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
-  font-size: 12px; letter-spacing: 3px; color: #00eeff; z-index: 10; text-shadow: 0 0 5px #000;
-}
-
-.reticle {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 40px; height: 40px; border: 1px solid rgba(0,238,255,0.3); pointer-events: none;
-}
+#controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:100; }
+.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4); border-radius:10px; color:#fff; font-size:11px; padding:12px; cursor:pointer; text-align:center; }
+.btn-ar { background:#004488; border-color:#00eeff; font-weight:bold; }
+#compass { position:fixed; top:15px; left:50%; transform:translateX(-50%); font-size:12px; letter-spacing:3px; color:#00eeff; z-index:100; text-shadow:0 0 5px #000; }
+.reticle { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:40px; height:40px; border:1px solid rgba(0,238,255,0.3); pointer-events:none; z-index:100; }
+#loading { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); color:#00eeff; font-size:14px; z-index:50; }
 </style>
 </head>
 <body>
-
+<div id="loading">INITIALIZING...</div>
 <canvas id="c"></canvas>
 <div class="reticle"></div>
 
 <div class="panel" id="pa">
-  <h1>📡 TARGETING SYSTEM</h1>
-  <div class="row"><span class="lbl">LOCATION</span><span class="val" id="u-gps">DEHRADUN (DEFAULT)</span></div>
-  <div class="row"><span class="lbl">LATITUDE</span><span class="val" id="u-lat">30.3165° N</span></div>
-  <div class="row"><span class="lbl">LONGITUDE</span><span class="val" id="u-lon">78.0322° E</span></div>
-  <div class="row" style="margin-top:8px; border-top:1px dashed #333; padding-top:8px;">
-      <span class="lbl">TARGET</span><span class="val" style="color:#ff9900;">ARTEMIS II</span>
-  </div>
+  <h1>📡 AR SKY TRACKER</h1>
+  <div class="row"><span class="lbl">LAT / LON</span><span class="val" id="u-ll">30.31° N / 78.03° E</span></div>
+  <div class="row" style="margin-top:8px; border-top:1px dashed #333; padding-top:8px;"><span class="lbl">TARGET</span><span class="val" style="color:#ff9900;">ARTEMIS II</span></div>
   <div class="row"><span class="lbl">ALTITUDE</span><span class="val" id="a-alt">--</span></div>
   <div class="row"><span class="lbl">AZIMUTH</span><span class="val" id="a-az">--</span></div>
   <div class="row"><span class="lbl">VISIBLE?</span><span class="val" id="a-vis">--</span></div>
@@ -67,314 +40,167 @@ canvas { display:block; }
 <div id="compass">HEADING: <span id="comp-dir">NORTH</span></div>
 
 <div id="controls">
-    <button class="btn" id="btn-gps" onclick="getLocation()">📍 Sync to Phone GPS</button>
-    <button class="btn" id="btn-lbls" onclick="toggleLabels()">🏷️ Hide Star Names</button>
-    <button class="btn btn-ar" id="btn-gyro" onclick="initGyro()">📳 Enable AR (Gyroscope)</button>
+    <button class="btn" onclick="getLocation()">📍 Sync Phone GPS</button>
+    <button class="btn" onclick="toggleLabels()" id="btn-lbls">🏷️ Hide Labels</button>
+    <button class="btn btn-ar" onclick="initGyro()" id="btn-gyro">📳 Enable AR (Gyro)</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-'use strict';
+window.addEventListener('load', () => {
+    document.getElementById('loading').style.display = 'none';
 
-// ═══════════════════════════════════════════════════
-//  ENVIRONMENT & STATE
-// ═══════════════════════════════════════════════════
-let MY_LAT = 30.3165, MY_LON = 78.0322; // Defaults to Dehradun
-let arEnabled = false;
-let showLabels = true;
-const R = 900;
+    let MY_LAT = 30.3165, MY_LON = 78.0322, arEnabled = false, showLabels = true;
+    const R = 900;
 
-// Star & Constellation Data
-const STARS = [[6.7525,-16.7161,-1.46,"Sirius"],[14.261,19.1822,-0.05,"Arcturus"],[18.616,38.7836,0.03,"Vega"],[5.2782,45.9980,0.08,"Capella"],[5.2423,-8.2016,0.13,"Rigel"],[7.6553,5.2250,0.38,"Procyon"],[5.9194,7.4070,0.50,"Betelgeuse"],[19.846,8.8683,0.76,"Altair"],[4.5987,16.5093,0.87,"Aldebaran"],[16.490,-26.4319,1.09,"Antares"],[13.420,-11.1613,1.04,"Spica"],[7.7553,28.0262,1.15,"Pollux"]];
-const CONSTELLATIONS = [
-  {name:"Orion", segs:[[[5.533,-0.299],[5.604,-1.202],[5.680,-1.943]], [[5.919,7.407],[5.604,-1.202]],[[5.419,6.350],[5.604,-1.202]], [[5.242,-8.202],[5.604,-1.202]],[[5.919,7.407],[5.419,6.350]]]},
-  {name:"Ursa Major", segs:[[[11.062,61.751],[11.031,56.382],[11.897,53.695],[12.900,55.960],[13.399,54.925],[13.792,49.313]]]},
-  {name:"Cassiopeia", segs:[[[0.675,56.537],[0.945,60.716],[0.145,59.150],[1.431,60.235],[0.675,56.537]]]}
-];
+    const STARS = [[6.75,-16.71,-1.46,"Sirius"],[14.26,19.18,-0.05,"Arcturus"],[18.61,38.78,0.03,"Vega"],[5.27,45.99,0.08,"Capella"],[5.24,-8.20,0.13,"Rigel"],[7.65,5.22,0.38,"Procyon"],[5.91,7.40,0.50,"Betelgeuse"],[19.84,8.86,0.76,"Altair"]];
+    const CONSTELLATIONS = [{name:"Orion",segs:[[[5.53,-0.29],[5.60,-1.20],[5.68,-1.94]],[[5.91,7.40],[5.60,-1.20]],[[5.41,6.35],[5.60,-1.20]],[[5.24,-8.20],[5.60,-1.20]],[[5.91,7.40],[5.41,6.35]]]}];
 
-// Math functions
-function eqToAltAz(ra, dec, lat, lon, date) {
-    const jd = date.getTime() / 86400000 + 2440587.5;
-    const gmst = (18.697 + 24.0657 * (jd - 2451545.0)) % 24;
-    let lst = (gmst + lon / 15 + 24) % 24;
-    let ha = (lst - ra) * 15 * Math.PI/180;
-    let rDec = dec * Math.PI/180, rLat = lat * Math.PI/180;
-    let sAlt = Math.sin(rDec)*Math.sin(rLat) + Math.cos(rDec)*Math.cos(rLat)*Math.cos(ha);
-    let alt = Math.asin(sAlt);
-    let cAz = (Math.sin(rDec) - Math.sin(rLat)*sAlt) / (Math.cos(rLat)*Math.cos(alt));
-    let sAz = (-Math.sin(ha)*Math.cos(rDec)) / Math.cos(alt);
-    let az = Math.atan2(sAz, cAz);
-    return { alt: alt * 180/Math.PI, az: (az * 180/Math.PI + 360) % 360 };
-}
-
-function altAzToVec3(alt, az, r) {
-    const rAlt = alt * Math.PI/180, rAz = az * Math.PI/180;
-    return new THREE.Vector3(r * Math.cos(rAlt) * Math.sin(rAz), r * Math.sin(rAlt), -r * Math.cos(rAlt) * Math.cos(rAz));
-}
-
-// ═══════════════════════════════════════════════════
-//  TEXT SPRITE GENERATOR (Dynamic Tags)
-// ═══════════════════════════════════════════════════
-function createTextLabel(text, color, scale, isBold = false) {
-    const cv = document.createElement('canvas');
-    const ctx = cv.getContext('2d');
-    const fontStr = `${isBold ? 'bold ' : ''}32px 'Courier New', monospace`;
-    ctx.font = fontStr;
-    const metrics = ctx.measureText(text);
-    cv.width = Math.max(64, metrics.width + 20);
-    cv.height = 40;
-    ctx.font = fontStr;
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, cv.width/2, cv.height/2);
-    const tex = new THREE.CanvasTexture(cv);
-    const mat = new THREE.SpriteMaterial({map: tex, transparent: true, opacity: 0.9});
-    const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(cv.width * scale, cv.height * scale, 1);
-    return sprite;
-}
-
-// ═══════════════════════════════════════════════════
-//  THREE.JS SETUP & SCENE BUILDING
-// ═══════════════════════════════════════════════════
-const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'), antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
-camera.position.set(0, 5, 0); 
-const sky = new THREE.Group(); scene.add(sky);
-
-// 1. Ground (Horizon)
-const ground = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshBasicMaterial({color: 0x0a101a, side: THREE.DoubleSide}));
-ground.rotation.x = -Math.PI/2; scene.add(ground);
-
-// 2. Compass Markers
-const dirs = [{l:'NORTH', az:0}, {l:'EAST', az:90}, {l:'SOUTH', az:180}, {l:'WEST', az:270}];
-dirs.forEach(d => {
-    const sprite = createTextLabel(d.l, 'rgba(0, 221, 255, 0.5)', 1.2, true);
-    sprite.position.copy(altAzToVec3(1, d.az, R - 100));
-    scene.add(sprite);
-});
-
-// 3. Stars and Labels
-const starMeshes = [];
-const labelSprites = [];
-
-STARS.forEach(([ra, dec, mag, name]) => {
-    let sz = mag < 0.5 ? 3.5 : 2.0;
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(sz, 8, 8), new THREE.MeshBasicMaterial({color: 0xffffff}));
-    mesh._ra = ra; mesh._dec = dec; 
-    sky.add(mesh); starMeshes.push(mesh);
+    function eqToAltAz(ra, dec, lat, lon, date) {
+        let jd = date.getTime()/86400000 + 2440587.5;
+        let lst = ((18.697 + 24.0657 * (jd - 2451545.0)) + lon/15) % 24;
+        if(lst<0) lst+=24;
+        let ha = (lst - ra) * 15 * Math.PI/180;
+        let rDec = dec * Math.PI/180, rLat = lat * Math.PI/180;
+        let sAlt = Math.sin(rDec)*Math.sin(rLat) + Math.cos(rDec)*Math.cos(rLat)*Math.cos(ha);
+        let alt = Math.asin(sAlt);
+        let cAz = (Math.sin(rDec) - Math.sin(rLat)*sAlt) / (Math.cos(rLat)*Math.cos(alt));
+        let sAz = (-Math.sin(ha)*Math.cos(rDec)) / Math.cos(alt);
+        let az = Math.atan2(sAz, cAz);
+        return { alt: alt*180/Math.PI, az: (az*180/Math.PI+360)%360 };
+    }
     
-    const label = createTextLabel(name, 'rgba(200, 220, 255, 0.7)', 0.5);
-    label._ra = ra; label._dec = dec; label._isConstellation = false;
-    sky.add(label); labelSprites.push(label);
-});
+    function a2v(alt, az, r) {
+        let rAlt=alt*Math.PI/180, rAz=az*Math.PI/180;
+        return new THREE.Vector3(r*Math.cos(rAlt)*Math.sin(rAz), r*Math.sin(rAlt), -r*Math.cos(rAlt)*Math.cos(rAz));
+    }
+    
+    function makeLbl(txt, c, sz) {
+        let cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+        ctx.font = "bold 32px monospace"; let m = ctx.measureText(txt);
+        cv.width=m.width+20; cv.height=40; ctx.font="bold 32px monospace"; ctx.fillStyle=c;
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(txt, cv.width/2, 20);
+        let sp = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv)}));
+        sp.scale.set(cv.width*sz, cv.height*sz, 1); return sp;
+    }
 
-// 4. Constellations and Labels
-const constellLines = [];
-CONSTELLATIONS.forEach(c => {
-    c.segs.forEach(seg => {
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(seg.length * 3), 3));
-        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color: 0x3366ff, transparent:true, opacity:0.5}));
-        line._seg = seg; 
-        sky.add(line); constellLines.push(line);
+    const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'), antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
+    camera.position.set(0,5,0); const sky = new THREE.Group(); scene.add(sky);
+
+    let grnd = new THREE.Mesh(new THREE.CircleGeometry(R,32), new THREE.MeshBasicMaterial({color:0x0a101a}));
+    grnd.rotation.x = -Math.PI/2; scene.add(grnd);
+
+    const objs = [], lbls = [];
+    [{l:'NORTH',a:0},{l:'EAST',a:90},{l:'SOUTH',a:180},{l:'WEST',a:270}].forEach(d => {
+        let s = makeLbl(d.l, '#00ddff', 1.0); s.position.copy(a2v(1, d.a, R-100)); scene.add(s);
     });
-    const cLabel = createTextLabel(c.name.toUpperCase(), '#3366ff', 0.6, true);
-    cLabel._ra = c.segs[0][0][0]; cLabel._dec = c.segs[0][0][1]; cLabel._isConstellation = true;
-    sky.add(cLabel); labelSprites.push(cLabel);
-});
 
-// 5. Artemis Target and Label
-const artemisGrp = new THREE.Group();
-const artemisCore = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 16), new THREE.MeshBasicMaterial({color: 0xff9900}));
-artemisGrp.add(artemisCore);
-const artemisLabel = createTextLabel("ARTEMIS II", '#ffaa00', 0.6, true);
-artemisLabel.position.set(0, 30, 0); 
-artemisGrp.add(artemisLabel);
-artemisGrp._ra = 12.9; artemisGrp._dec = -5.2; 
-sky.add(artemisGrp);
+    STARS.forEach(s => {
+        let m = new THREE.Mesh(new THREE.SphereGeometry(3,8,8), new THREE.MeshBasicMaterial({color:0xffffff}));
+        m.ra=s[0]; m.dec=s[1]; sky.add(m); objs.push(m);
+        let l = makeLbl(s[3], '#c8dcff', 0.5); l.ra=s[0]; l.dec=s[1]; sky.add(l); lbls.push(l);
+    });
 
-// ═══════════════════════════════════════════════════
-//  CAMERA CONTROLS (DRAG FALLBACK + GYRO)
-// ═══════════════════════════════════════════════════
-let isDragging = false, prevM = {x:0, y:0};
-let camLon = 180, camLat = 20;
+    CONSTELLATIONS.forEach(c => {
+        c.segs.forEach(seg => {
+            let pts = new Float32Array(seg.length*3);
+            let ln = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pts,3)), new THREE.LineBasicMaterial({color:0x3366ff}));
+            ln.seg=seg; sky.add(ln); objs.push(ln);
+        });
+        let cl = makeLbl(c.name, '#3366ff', 0.6); cl.ra=c.segs[0][0][0]; cl.dec=c.segs[0][0][1]; sky.add(cl); lbls.push(cl);
+    });
 
-renderer.domElement.addEventListener('touchstart', e => { if(!arEnabled) { isDragging=true; prevM={x:e.touches[0].clientX, y:e.touches[0].clientY}; }});
-window.addEventListener('touchend', () => isDragging = false);
-window.addEventListener('touchmove', e => {
-    if (isDragging && !arEnabled) {
-        camLon -= (e.touches[0].clientX - prevM.x) * 0.2;
-        camLat -= (e.touches[0].clientY - prevM.y) * 0.2;
-        camLat = Math.max(-10, Math.min(89, camLat));
-        updateDragCamera();
-        prevM = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+    const art = new THREE.Mesh(new THREE.SphereGeometry(10,16,16), new THREE.MeshBasicMaterial({color:0xff9900}));
+    art.ra=12.9; art.dec=-5.2; sky.add(art); objs.push(art);
+    const aLbl = makeLbl("ARTEMIS II", '#ffaa00', 0.6); sky.add(aLbl);
+
+    let isD=false, pM={x:0,y:0}, cLon=180, cLat=20;
+    renderer.domElement.addEventListener('touchstart',e=>{if(!arEnabled){isD=true; pM={x:e.touches[0].clientX,y:e.touches[0].clientY};}});
+    window.addEventListener('touchend',()=>isD=false);
+    window.addEventListener('touchmove',e=>{if(isD&&!arEnabled){cLon-=(e.touches[0].clientX-pM.x)*0.2; cLat-=(e.touches[0].clientY-pM.y)*0.2; cLat=Math.max(-10,Math.min(89,cLat)); updCam(); pM={x:e.touches[0].clientX,y:e.touches[0].clientY};}});
+
+    function updCam() {
+        let phi = (90-cLat)*Math.PI/180, th = cLon*Math.PI/180;
+        camera.lookAt(camera.position.x+100*Math.sin(phi)*Math.sin(th), camera.position.y+100*Math.cos(phi), camera.position.z-100*Math.sin(phi)*Math.cos(th));
+        let d = (cLon%360+360)%360, dir="NORTH";
+        if(d>45&&d<=135) dir="EAST"; else if(d>135&&d<=225) dir="SOUTH"; else if(d>225&&d<=315) dir="WEST";
+        document.getElementById('comp-dir').textContent=dir;
     }
-});
-// Mouse fallback for desktop testing
-renderer.domElement.addEventListener('mousedown', e => { if(!arEnabled) { isDragging=true; prevM={x:e.clientX, y:e.clientY}; }});
-window.addEventListener('mouseup', () => isDragging = false);
-window.addEventListener('mousemove', e => {
-    if (isDragging && !arEnabled) {
-        camLon -= (e.clientX - prevM.x) * 0.15;
-        camLat -= (e.clientY - prevM.y) * 0.15;
-        camLat = Math.max(-10, Math.min(89, camLat));
-        updateDragCamera();
-        prevM = {x:e.clientX, y:e.clientY};
+
+    window.initGyro = async function() {
+        if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+            try {
+                if(await DeviceOrientationEvent.requestPermission() === 'granted') startGyro();
+            }catch(e){alert("Gyro error");}
+        } else startGyro();
     }
-});
+    
+    function startGyro(){ window.addEventListener('deviceorientation',e=>{
+        if(!arEnabled) return;
+        let al=e.alpha?e.alpha*Math.PI/180:0, b=e.beta?e.beta*Math.PI/180:0, g=e.gamma?e.gamma*Math.PI/180:0;
+        camera.quaternion.setFromEuler(new THREE.Euler(b,al,-g,'YXZ'));
+        let d = (360-e.alpha)%360, dir="NORTH";
+        if(d>45&&d<=135) dir="EAST"; else if(d>135&&d<=225) dir="SOUTH"; else if(d>225&&d<=315) dir="WEST";
+        document.getElementById('comp-dir').textContent=dir;
+    }); arEnabled=true; document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; document.getElementById('btn-gyro').style.background="#008844"; }
 
-function updateDragCamera() {
-    const phi = THREE.MathUtils.degToRad(90 - camLat);
-    const theta = THREE.MathUtils.degToRad(camLon);
-    camera.lookAt(camera.position.x + 100 * Math.sin(phi) * Math.sin(theta), camera.position.y + 100 * Math.cos(phi), camera.position.z - 100 * Math.sin(phi) * Math.cos(theta));
-    updateCompassUI(camLon);
-}
+    window.toggleLabels = function() { showLabels=!showLabels; document.getElementById('btn-lbls').textContent=showLabels?"🏷️ Hide Labels":"🏷️ Show Labels"; aLbl.visible=showLabels; }
+    
+    window.getLocation = function() {
+        document.getElementById('btn-gps').textContent="⏳ Locating...";
+        if(navigator.geolocation) navigator.geolocation.getCurrentPosition(p=>{
+            MY_LAT=p.coords.latitude; MY_LON=p.coords.longitude;
+            document.getElementById('u-ll').textContent=`${MY_LAT.toFixed(2)}°N / ${MY_LON.toFixed(2)}°E`;
+            document.getElementById('btn-gps').textContent="✅ GPS Synced";
+        }, e=>{ document.getElementById('btn-gps').textContent="❌ GPS Denied"; });
+    }
 
-// AR Gyroscope Logic
-async function initGyro() {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    async function fetchNASA() {
         try {
-            const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === 'granted') {
-                window.addEventListener('deviceorientation', handleOrientation);
-                arEnabled = true;
-                document.getElementById('btn-gyro').textContent = "✅ AR ACTIVE";
-                document.getElementById('btn-gyro').style.background = "#008844";
-            } else { alert("Permission denied. You can still swipe to look around."); }
-        } catch (e) { alert("Error accessing gyro."); }
-    } else {
-        window.addEventListener('deviceorientation', handleOrientation);
-        arEnabled = true;
-        document.getElementById('btn-gyro').textContent = "✅ AR ACTIVE";
-    }
-}
-
-function handleOrientation(e) {
-    if (!arEnabled) return;
-    const alpha = e.alpha ? THREE.MathUtils.degToRad(e.alpha) : 0;
-    const beta = e.beta ? THREE.MathUtils.degToRad(e.beta) : 0;
-    const gamma = e.gamma ? THREE.MathUtils.degToRad(e.gamma) : 0;
-    camera.quaternion.setFromEuler(new THREE.Euler(beta, alpha, -gamma, 'YXZ'));
-    updateCompassUI(360 - e.alpha);
-}
-
-function updateCompassUI(degrees) {
-    let d = (degrees % 360 + 360) % 360;
-    let dir = "NORTH";
-    if (d>45 && d<=135) dir="EAST"; else if (d>135 && d<=225) dir="SOUTH"; else if (d>225 && d<=315) dir="WEST";
-    document.getElementById('comp-dir').textContent = dir;
-}
-
-// ═══════════════════════════════════════════════════
-//  UI TOGGLES & GPS
-// ═══════════════════════════════════════════════════
-function toggleLabels() {
-    showLabels = !showLabels;
-    document.getElementById('btn-lbls').textContent = showLabels ? "🏷️ Hide Star Names" : "🏷️ Show Star Names";
-    artemisLabel.visible = showLabels;
-}
-
-function getLocation() {
-    const btn = document.getElementById('btn-gps');
-    btn.textContent = "⏳ Locating...";
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                MY_LAT = pos.coords.latitude; MY_LON = pos.coords.longitude;
-                document.getElementById('u-gps').textContent = "LIVE GPS TAGGED ✅";
-                document.getElementById('u-lat').textContent = `${MY_LAT.toFixed(4)}° N`;
-                document.getElementById('u-lon').textContent = `${MY_LON.toFixed(4)}° E`;
-                btn.textContent = "✅ GPS Connected";
-            },
-            (err) => { 
-                document.getElementById('u-gps').textContent = "DENIED BY iOS";
-                btn.textContent = "❌ Check Settings"; 
-                alert("Location denied! Check iOS Settings -> Safari -> Location.");
+            let n=new Date(), ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            let res = await fetch(`https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND='-1024'&OBJ_DATA='NO'&MAKE_EPHEM='YES'&EPHEM_TYPE='OBSERVER'&CENTER='500@399'&START_TIME='${ymd(n)}'&STOP_TIME='${ymd(new Date(n.getTime()+86400000))}'&STEP_SIZE='1 h'&QUANTITIES='1'`);
+            let j=await res.json(), s=j.result.indexOf('$$SOE'), e=j.result.indexOf('$$EOE');
+            if(s>-1){ let m = j.result.substring(s+5,e).trim().split('\n').pop().match(/\s+(\d{1,2})\s+(\d{2})\s+([\d.]+)\s+([+-]\d{1,3})\s+(\d{2})\s+([\d.]+)/);
+                if(m){ art.ra=+m[1]+ +m[2]/60+ +m[3]/3600; art.dec=(+m[4]<0?-1:1)*(Math.abs(+m[4])+ +m[5]/60+ +m[6]/3600); }
             }
-        );
+        }catch(e){}
     }
-}
 
-// ═══════════════════════════════════════════════════
-//  LOOP & ANIMATION
-// ═══════════════════════════════════════════════════
-function update() {
-    const now = new Date();
-    
-    // Update Stars
-    starMeshes.forEach(m => {
-        const hz = eqToAltAz(m._ra, m._dec, MY_LAT, MY_LON, now);
-        m.position.copy(altAzToVec3(hz.alt, hz.az, R-50));
-        m.visible = hz.alt > -5;
-    });
-
-    // Update Text Labels
-    labelSprites.forEach(label => {
-        const hz = eqToAltAz(label._ra, label._dec, MY_LAT, MY_LON, now);
-        const offsetAlt = label._isConstellation ? hz.alt + 2.5 : hz.alt - 1.5;
-        const offsetAz = label._isConstellation ? hz.az : hz.az + 1.5;
-        label.position.copy(altAzToVec3(offsetAlt, offsetAz, R - 60));
-        label.visible = showLabels && hz.alt > 0; 
-    });
-
-    // Update Constellation Lines
-    constellLines.forEach(line => {
-        const posAttr = line.geometry.attributes.position;
-        let isVisible = false;
-        for(let i=0; i<line._seg.length; i++) {
-            const hz = eqToAltAz(line._seg[i][0], line._seg[i][1], MY_LAT, MY_LON, now);
-            if (hz.alt > 0) isVisible = true;
-            const pos = altAzToVec3(hz.alt, hz.az, R - 55);
-            posAttr.setXYZ(i, pos.x, pos.y, pos.z);
-        }
-        posAttr.needsUpdate = true;
-        line.visible = isVisible;
-    });
-
-    // Update Artemis
-    const aHz = eqToAltAz(artemisGrp._ra, artemisGrp._dec, MY_LAT, MY_LON, now);
-    artemisGrp.position.copy(altAzToVec3(aHz.alt, aHz.az, R-65));
-    artemisLabel.lookAt(camera.position); 
-    
-    document.getElementById('a-alt').textContent = `${aHz.alt.toFixed(1)}°`;
-    document.getElementById('a-az').textContent = `${aHz.az.toFixed(1)}°`;
-    document.getElementById('a-vis').textContent = aHz.alt > 0 ? "YES" : "NO (Below Horizon)";
-    document.getElementById('a-vis').style.color = aHz.alt > 0 ? "#00ff88" : "#ff4444";
-
-    renderer.render(scene, camera);
-    requestAnimationFrame(update);
-}
-
-// Fetch live NASA data
-async function fetchLiveArtemis() {
-    try {
-        const now = new Date(), pad = n => String(n).padStart(2,'0');
-        const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-        const res = await fetch(`https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND='-1024'&OBJ_DATA='NO'&MAKE_EPHEM='YES'&EPHEM_TYPE='OBSERVER'&CENTER='500@399'&START_TIME='${ymd(now)}'&STOP_TIME='${ymd(new Date(now.getTime()+86400000))}'&STEP_SIZE='1 h'&QUANTITIES='1'`);
-        const json = await res.json();
-        const s = json.result.indexOf('$$SOE'), e = json.result.indexOf('$$EOE');
-        if (s > -1) {
-            const m = json.result.substring(s+5, e).trim().split('\n').pop().match(/\d{4}-\w{3}-\d{2}\s+\d{2}:\d{2}\s+\*?\s+(\d{1,2})\s+(\d{2})\s+([\d.]+)\s+([+-]\d{1,3})\s+(\d{2})\s+([\d.]+)/);
-            if (m) {
-                artemisGrp._ra = +m[1] + +m[2]/60 + +m[3]/3600;
-                artemisGrp._dec = (+m[4] < 0 ? -1 : 1) * (Math.abs(+m[4]) + +m[5]/60 + +m[6]/3600);
+    function animate() {
+        let n=new Date();
+        objs.forEach(m => {
+            if(m.geometry&&m.geometry.type==="BufferGeometry"&&m.seg) {
+                let p=m.geometry.attributes.position, vis=false;
+                for(let i=0;i<m.seg.length;i++){
+                    let hz = eqToAltAz(m.seg[i][0], m.seg[i][1], MY_LAT, MY_LON, n);
+                    if(hz.alt>0) vis=true;
+                    let v = a2v(hz.alt, hz.az, R-55); p.setXYZ(i, v.x, v.y, v.z);
+                }
+                p.needsUpdate=true; m.visible=vis;
+            } else {
+                let hz = eqToAltAz(m.ra, m.dec, MY_LAT, MY_LON, n);
+                m.position.copy(a2v(hz.alt, hz.az, R-(m===art?65:50))); m.visible=hz.alt>-5;
             }
-        }
-    } catch(e) {}
-}
+        });
+        lbls.forEach(l => {
+            let hz = eqToAltAz(l.ra, l.dec, MY_LAT, MY_LON, n);
+            l.position.copy(a2v(hz.alt+2, hz.az, R-60)); l.visible=showLabels&&hz.alt>0;
+        });
+        
+        let aHz = eqToAltAz(art.ra, art.dec, MY_LAT, MY_LON, n);
+        aLbl.position.copy(a2v(aHz.alt+3, aHz.az, R-65)); aLbl.visible=showLabels&&aHz.alt>0;
+        document.getElementById('a-alt').textContent=aHz.alt.toFixed(1)+'°';
+        document.getElementById('a-az').textContent=aHz.az.toFixed(1)+'°';
+        document.getElementById('a-vis').textContent=aHz.alt>0?"YES":"NO";
+        document.getElementById('a-vis').style.color=aHz.alt>0?"#0f8":"#f44";
 
-updateDragCamera();
-fetchLiveArtemis();
-update();
+        renderer.render(scene, camera); requestAnimationFrame(animate);
+    }
 
-window.addEventListener('resize', () => {
-    renderer.setSize(innerWidth, innerHeight);
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
+    updCam(); fetchNASA(); animate();
+    window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); });
 });
 </script>
 </body>
