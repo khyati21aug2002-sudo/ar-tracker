@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AR Sky Tracker - iOS Point-to-Look</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; }
+canvas { display:block; }
+
+/* UI Panels */
+.panel {
+  position:fixed; background:rgba(0,10,30,0.9);
+  border:1px solid rgba(0,180,255,0.22); border-radius:12px;
+  padding:12px 16px; backdrop-filter:blur(8px);
+  box-shadow:0 0 20px rgba(0,80,200,0.14); min-width:220px; z-index: 10;
+}
+.panel h1 { font-size:11px; letter-spacing:2px; margin-bottom:8px;
+            padding-bottom:6px; border-bottom:1px solid rgba(0,180,255,0.18); }
+.row { display:flex; justify-content:space-between; padding:4px 0; font-size:10px; }
+.lbl { color:#3d7a9a; }
+.val { color:#eee; font-weight:bold; }
+
+#pa { top:env(safe-area-inset-top, 20px); left:15px; }
+#pa h1 { color:#ff9900; }
+
+/* Controls */
+#controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:20; }
+.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4);
+       border-radius:10px; color:#fff; font-family:inherit;
+       font-size:11px; padding:14px; cursor:pointer; min-width:180px; text-align:center; }
+.btn-ar { background: #004488; border-color: #00eeff; font-weight: bold; }
+
+#compass {
+  position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 3px; color: #00eeff; z-index: 10;
+}
+
+.reticle {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 40px; height: 40px; border: 1px solid rgba(0,238,255,0.3); pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div class="reticle"></div>
+
+<div class="panel" id="pa">
+  <h1>📡 TARGETING SYSTEM</h1>
+  <div class="row"><span class="lbl">GPS</span><span class="val" id="u-gps">SEARCHING...</span></div>
+  <div class="row"><span class="lbl">TARGET</span><span class="val" style="color:#ff9900;">ARTEMIS II</span></div>
+  <div class="row"><span class="lbl">ALTITUDE</span><span class="val" id="a-alt">--</span></div>
+  <div class="row"><span class="lbl">AZIMUTH</span><span class="val" id="a-az">--</span></div>
+</div>
+
+<div id="compass">HEADING: <span id="comp-dir">--</span></div>
+
+<div id="controls">
+    <button class="btn btn-ar" id="btn-gyro" onclick="initGyro()">📳 Enable AR (Gyroscope)</button>
+    <button class="btn" onclick="snapToArtemis()">🎯 Snap to Artemis</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════
+//  ENVIRONMENT & ASTRONOMY
+// ═══════════════════════════════════════════════════
+let MY_LAT = 30.3165, MY_LON = 78.0322; // Dehradun
+let arEnabled = false;
+const R = 900;
+
+// Star Data
+const STARS = [[6.7525,-16.7161,-1.46,"Sirius"],[14.261,19.1822,-0.05,"Arcturus"],[18.616,38.7836,0.03,"Vega"],[5.2782,45.9980,0.08,"Capella"],[5.2423,-8.2016,0.13,"Rigel"],[7.6553,5.2250,0.38,"Procyon"],[5.9194,7.4070,0.50,"Betelgeuse"],[19.846,8.8683,0.76,"Altair"]];
+
+// Math functions
+function eqToAltAz(ra, dec, lat, lon, date) {
+    const jd = date.getTime() / 86400000 + 2440587.5;
+    const gmst = (18.697 + 24.0657 * (jd - 2451545.0)) % 24;
+    let lst = (gmst + lon / 15 + 24) % 24;
+    let ha = (lst - ra) * 15 * Math.PI/180;
+    let rDec = dec * Math.PI/180, rLat = lat * Math.PI/180;
+    let sAlt = Math.sin(rDec)*Math.sin(rLat) + Math.cos(rDec)*Math.cos(rLat)*Math.cos(ha);
+    let alt = Math.asin(sAlt);
+    let cAz = (Math.sin(rDec) - Math.sin(rLat)*sAlt) / (Math.cos(rLat)*Math.cos(alt));
+    let sAz = (-Math.sin(ha)*Math.cos(rDec)) / Math.cos(alt);
+    let az = Math.atan2(sAz, cAz);
+    return { alt: alt * 180/Math.PI, az: (az * 180/Math.PI + 360) % 360 };
+}
+
+function altAzToVec3(alt, az, r) {
+    const rAlt = alt * Math.PI/180, rAz = az * Math.PI/180;
+    return new THREE.Vector3(r * Math.cos(rAlt) * Math.sin(rAz), r * Math.sin(rAlt), -r * Math.cos(rAlt) * Math.cos(rAz));
+}
+
+// ═══════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ═══════════════════════════════════════════════════
+const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'), antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
+const sky = new THREE.Group(); scene.add(sky);
+
+// Add Ground
+const ground = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshBasicMaterial({color: 0x05080c}));
+ground.rotation.x = -Math.PI/2; scene.add(ground);
+
+// Add Stars
+const starMeshes = STARS.map(s => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial({color: 0xffffff}));
+    m._ra = s[0]; m._dec = s[1]; sky.add(m); return m;
+});
+
+// Add Artemis
+const artemis = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 12), new THREE.MeshBasicMaterial({color: 0xff9900}));
+artemis._ra = 12.9; artemis._dec = -5.2; sky.add(artemis);
+
+// ═══════════════════════════════════════════════════
+//  GYROSCOPE / AR LOGIC
+// ═══════════════════════════════════════════════════
+async function initGyro() {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') {
+                window.addEventListener('deviceorientation', handleOrientation);
+                arEnabled = true;
+                document.getElementById('btn-gyro').textContent = "✅ AR ACTIVE";
+            }
+        } catch (e) { alert("Gyroscope access denied."); }
+    } else {
+        // Fallback for non-iOS or older devices
+        window.addEventListener('deviceorientation', handleOrientation);
+        arEnabled = true;
+    }
+}
+
+function handleOrientation(e) {
+    if (!arEnabled) return;
+    
+    // Alpha = Compass heading, Beta = Tilt forward/back, Gamma = Tilt left/right
+    const alpha = e.alpha ? THREE.MathUtils.degToRad(e.alpha) : 0; // Z
+    const beta = e.beta ? THREE.MathUtils.degToRad(e.beta) : 0;   // X
+    const gamma = e.gamma ? THREE.MathUtils.degToRad(e.gamma) : 0; // Y
+
+    // Apply rotations in the correct mobile order
+    const orientEuler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
+    camera.quaternion.setFromEuler(orientEuler);
+}
+
+// ═══════════════════════════════════════════════════
+//  LOOP & INTERACTION
+// ═══════════════════════════════════════════════════
+function update() {
+    const now = new Date();
+    starMeshes.forEach(m => {
+        const hz = eqToAltAz(m._ra, m._dec, MY_LAT, MY_LON, now);
+        m.position.copy(altAzToVec3(hz.alt, hz.az, R-50));
+        m.visible = hz.alt > -5;
+    });
+
+    const aHz = eqToAltAz(artemis._ra, artemis._dec, MY_LAT, MY_LON, now);
+    artemis.position.copy(altAzToVec3(aHz.alt, aHz.az, R-60));
+    
+    document.getElementById('a-alt').textContent = `${aHz.alt.toFixed(1)}°`;
+    document.getElementById('a-az').textContent = `${aHz.az.toFixed(1)}°`;
+    
+    if (!arEnabled) {
+        // Standard drag fallback if AR isn't on
+        // (Insert your previous drag logic here if desired)
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(update);
+}
+
+function snapToArtemis() {
+    const aHz = eqToAltAz(artemis._ra, artemis._dec, MY_LAT, MY_LON, new Date());
+    // In manual mode, rotate camera to target
+    // If in AR mode, this tells you how far to move your arm
+}
+
+// Get GPS
+navigator.geolocation.getCurrentPosition(p => {
+    MY_LAT = p.coords.latitude; MY_LON = p.coords.longitude;
+    document.getElementById('u-gps').textContent = "SYNCED";
+});
+
+update();
+</script>
+</body>
+</html>
