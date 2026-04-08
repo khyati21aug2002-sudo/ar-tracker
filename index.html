@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>AR Sky Tracker - iOS Point-to-Look</title>
+<title>AR Sky Tracker</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -12,7 +12,6 @@
 body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; }
 canvas { display:block; }
 
-/* UI Panels */
 .panel {
   position:fixed; background:rgba(0,10,30,0.9);
   border:1px solid rgba(0,180,255,0.22); border-radius:12px;
@@ -28,7 +27,6 @@ canvas { display:block; }
 #pa { top:env(safe-area-inset-top, 20px); left:15px; }
 #pa h1 { color:#ff9900; }
 
-/* Controls */
 #controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:20; }
 .btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4);
        border-radius:10px; color:#fff; font-family:inherit;
@@ -37,7 +35,7 @@ canvas { display:block; }
 
 #compass {
   position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
-  font-size: 12px; letter-spacing: 3px; color: #00eeff; z-index: 10;
+  font-size: 12px; letter-spacing: 3px; color: #00eeff; z-index: 10; text-shadow: 0 0 5px #000;
 }
 
 .reticle {
@@ -53,17 +51,18 @@ canvas { display:block; }
 
 <div class="panel" id="pa">
   <h1>📡 TARGETING SYSTEM</h1>
-  <div class="row"><span class="lbl">GPS</span><span class="val" id="u-gps">SEARCHING...</span></div>
+  <div class="row"><span class="lbl">GPS</span><span class="val" id="u-gps">DEFAULT (Dehradun)</span></div>
   <div class="row"><span class="lbl">TARGET</span><span class="val" style="color:#ff9900;">ARTEMIS II</span></div>
   <div class="row"><span class="lbl">ALTITUDE</span><span class="val" id="a-alt">--</span></div>
   <div class="row"><span class="lbl">AZIMUTH</span><span class="val" id="a-az">--</span></div>
+  <div class="row"><span class="lbl">VISIBLE?</span><span class="val" id="a-vis">--</span></div>
 </div>
 
-<div id="compass">HEADING: <span id="comp-dir">--</span></div>
+<div id="compass">HEADING: <span id="comp-dir">NORTH</span></div>
 
 <div id="controls">
+    <button class="btn" id="btn-gps" onclick="getLocation()">📍 Sync to Phone GPS</button>
     <button class="btn btn-ar" id="btn-gyro" onclick="initGyro()">📳 Enable AR (Gyroscope)</button>
-    <button class="btn" onclick="snapToArtemis()">🎯 Snap to Artemis</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -73,7 +72,7 @@ canvas { display:block; }
 // ═══════════════════════════════════════════════════
 //  ENVIRONMENT & ASTRONOMY
 // ═══════════════════════════════════════════════════
-let MY_LAT = 30.3165, MY_LON = 78.0322; // Dehradun
+let MY_LAT = 30.3165, MY_LON = 78.0322; // Defaults to Dehradun
 let arEnabled = false;
 const R = 900;
 
@@ -107,25 +106,50 @@ const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'), a
 renderer.setSize(innerWidth, innerHeight);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, 5, 0); // Stand above ground
 const sky = new THREE.Group(); scene.add(sky);
 
-// Add Ground
-const ground = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshBasicMaterial({color: 0x05080c}));
+// Add Ground (Visible horizon)
+const ground = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshBasicMaterial({color: 0x0a101a, side: THREE.DoubleSide}));
 ground.rotation.x = -Math.PI/2; scene.add(ground);
 
 // Add Stars
 const starMeshes = STARS.map(s => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial({color: 0xffffff}));
+    const m = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 8), new THREE.MeshBasicMaterial({color: 0xffffff}));
     m._ra = s[0]; m._dec = s[1]; sky.add(m); return m;
 });
 
-// Add Artemis
-const artemis = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 12), new THREE.MeshBasicMaterial({color: 0xff9900}));
+// Add Artemis Target
+const artemis = new THREE.Mesh(new THREE.SphereGeometry(12, 12, 12), new THREE.MeshBasicMaterial({color: 0xff9900}));
 artemis._ra = 12.9; artemis._dec = -5.2; sky.add(artemis);
 
 // ═══════════════════════════════════════════════════
-//  GYROSCOPE / AR LOGIC
+//  CAMERA CONTROLS (DRAG FALLBACK + GYRO)
 // ═══════════════════════════════════════════════════
+let isDragging = false, prevM = {x:0, y:0};
+let camLon = 180, camLat = 20;
+
+// Touch / Mouse Drag Logic
+renderer.domElement.addEventListener('touchstart', e => { if(!arEnabled) { isDragging=true; prevM={x:e.touches[0].clientX, y:e.touches[0].clientY}; }});
+window.addEventListener('touchend', () => isDragging = false);
+window.addEventListener('touchmove', e => {
+    if (isDragging && !arEnabled) {
+        camLon -= (e.touches[0].clientX - prevM.x) * 0.2;
+        camLat -= (e.touches[0].clientY - prevM.y) * 0.2;
+        camLat = Math.max(-10, Math.min(89, camLat));
+        updateDragCamera();
+        prevM = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+    }
+});
+
+function updateDragCamera() {
+    const phi = THREE.MathUtils.degToRad(90 - camLat);
+    const theta = THREE.MathUtils.degToRad(camLon);
+    camera.lookAt(camera.position.x + 100 * Math.sin(phi) * Math.sin(theta), camera.position.y + 100 * Math.cos(phi), camera.position.z - 100 * Math.sin(phi) * Math.cos(theta));
+    updateCompassUI(camLon);
+}
+
+// AR Gyroscope Logic
 async function initGyro() {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
@@ -134,30 +158,58 @@ async function initGyro() {
                 window.addEventListener('deviceorientation', handleOrientation);
                 arEnabled = true;
                 document.getElementById('btn-gyro').textContent = "✅ AR ACTIVE";
+                document.getElementById('btn-gyro').style.background = "#008844";
+            } else {
+                alert("Permission denied. You can still swipe to look around.");
             }
-        } catch (e) { alert("Gyroscope access denied."); }
+        } catch (e) { alert("Error accessing gyro."); }
     } else {
-        // Fallback for non-iOS or older devices
         window.addEventListener('deviceorientation', handleOrientation);
         arEnabled = true;
+        document.getElementById('btn-gyro').textContent = "✅ AR ACTIVE";
     }
 }
 
 function handleOrientation(e) {
     if (!arEnabled) return;
-    
-    // Alpha = Compass heading, Beta = Tilt forward/back, Gamma = Tilt left/right
-    const alpha = e.alpha ? THREE.MathUtils.degToRad(e.alpha) : 0; // Z
-    const beta = e.beta ? THREE.MathUtils.degToRad(e.beta) : 0;   // X
-    const gamma = e.gamma ? THREE.MathUtils.degToRad(e.gamma) : 0; // Y
+    const alpha = e.alpha ? THREE.MathUtils.degToRad(e.alpha) : 0;
+    const beta = e.beta ? THREE.MathUtils.degToRad(e.beta) : 0;
+    const gamma = e.gamma ? THREE.MathUtils.degToRad(e.gamma) : 0;
+    camera.quaternion.setFromEuler(new THREE.Euler(beta, alpha, -gamma, 'YXZ'));
+    updateCompassUI(360 - e.alpha);
+}
 
-    // Apply rotations in the correct mobile order
-    const orientEuler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
-    camera.quaternion.setFromEuler(orientEuler);
+function updateCompassUI(degrees) {
+    let d = (degrees % 360 + 360) % 360;
+    let dir = "NORTH";
+    if (d>45 && d<=135) dir="EAST"; else if (d>135 && d<=225) dir="SOUTH"; else if (d>225 && d<=315) dir="WEST";
+    document.getElementById('comp-dir').textContent = dir;
 }
 
 // ═══════════════════════════════════════════════════
-//  LOOP & INTERACTION
+//  GPS LOGIC
+// ═══════════════════════════════════════════════════
+function getLocation() {
+    const btn = document.getElementById('btn-gps');
+    btn.textContent = "⏳ Locating...";
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                MY_LAT = pos.coords.latitude; MY_LON = pos.coords.longitude;
+                document.getElementById('u-gps').textContent = "LIVE SYNCED ✅";
+                btn.textContent = "✅ GPS Connected";
+            },
+            (err) => { 
+                document.getElementById('u-gps').textContent = "DENIED BY iOS";
+                btn.textContent = "❌ Check Settings"; 
+                alert("Location denied! Check iOS Settings -> Safari -> Location to allow it.");
+            }
+        );
+    }
+}
+
+// ═══════════════════════════════════════════════════
+//  LOOP & ANIMATION
 // ═══════════════════════════════════════════════════
 function update() {
     const now = new Date();
@@ -172,28 +224,33 @@ function update() {
     
     document.getElementById('a-alt').textContent = `${aHz.alt.toFixed(1)}°`;
     document.getElementById('a-az').textContent = `${aHz.az.toFixed(1)}°`;
-    
-    if (!arEnabled) {
-        // Standard drag fallback if AR isn't on
-        // (Insert your previous drag logic here if desired)
-    }
+    document.getElementById('a-vis').textContent = aHz.alt > 0 ? "YES" : "NO (Below Horizon)";
+    document.getElementById('a-vis').style.color = aHz.alt > 0 ? "#00ff88" : "#ff4444";
 
     renderer.render(scene, camera);
     requestAnimationFrame(update);
 }
 
-function snapToArtemis() {
-    const aHz = eqToAltAz(artemis._ra, artemis._dec, MY_LAT, MY_LON, new Date());
-    // In manual mode, rotate camera to target
-    // If in AR mode, this tells you how far to move your arm
+// Fetch live NASA data
+async function fetchLiveArtemis() {
+    try {
+        const now = new Date(), pad = n => String(n).padStart(2,'0');
+        const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        const res = await fetch(`https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND='-1024'&OBJ_DATA='NO'&MAKE_EPHEM='YES'&EPHEM_TYPE='OBSERVER'&CENTER='500@399'&START_TIME='${ymd(now)}'&STOP_TIME='${ymd(new Date(now.getTime()+86400000))}'&STEP_SIZE='1 h'&QUANTITIES='1'`);
+        const json = await res.json();
+        const s = json.result.indexOf('$$SOE'), e = json.result.indexOf('$$EOE');
+        if (s > -1) {
+            const m = json.result.substring(s+5, e).trim().split('\n').pop().match(/\d{4}-\w{3}-\d{2}\s+\d{2}:\d{2}\s+\*?\s+(\d{1,2})\s+(\d{2})\s+([\d.]+)\s+([+-]\d{1,3})\s+(\d{2})\s+([\d.]+)/);
+            if (m) {
+                artemis._ra = +m[1] + +m[2]/60 + +m[3]/3600;
+                artemis._dec = (+m[4] < 0 ? -1 : 1) * (Math.abs(+m[4]) + +m[5]/60 + +m[6]/3600);
+            }
+        }
+    } catch(e) {}
 }
 
-// Get GPS
-navigator.geolocation.getCurrentPosition(p => {
-    MY_LAT = p.coords.latitude; MY_LON = p.coords.longitude;
-    document.getElementById('u-gps').textContent = "SYNCED";
-});
-
+updateDragCamera();
+fetchLiveArtemis();
 update();
 </script>
 </body>
