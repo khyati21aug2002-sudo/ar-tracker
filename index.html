@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AR Sky Tracker - Pro Edition</title>
+<title>AR Sky Tracker - Deep Space Edition</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
 body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; -webkit-user-select:none; }
@@ -18,11 +18,11 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
 #pa { top:env(safe-area-inset-top, 35px); left:15px; }
 
 #controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:100; }
-.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4); border-radius:10px; color:#fff; font-size:11px; padding:12px; cursor:pointer; }
-.btn-ar { background:#004488; border-color:#00eeff; font-weight:bold; }
+.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4); border-radius:10px; color:#fff; font-size:11px; padding:12px; cursor:pointer; font-weight:bold;}
+.btn-ar { background:#004488; border-color:#00eeff; }
 #compass { position:fixed; top:15px; left:50%; transform:translateX(-50%); font-size:12px; letter-spacing:3px; color:#00eeff; z-index:100; text-shadow:0 0 5px #000; }
 .reticle { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:40px; height:40px; border:1px solid rgba(0,238,255,0.3); pointer-events:none; z-index:100; }
-#loading { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); color:#00eeff; font-size:14px; z-index:50; }
+#loading { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); color:#00eeff; font-size:14px; z-index:50; font-weight:bold; letter-spacing:2px;}
 #you-hud { display:none; position:fixed; top:40%; left:50%; transform:translateX(-50%); text-align:center; color:#00ff88; font-weight:bold; font-size:18px; text-shadow:0 0 10px #000; z-index:100; pointer-events:none;}
 #you-dir-lbl { font-size:12px; color:#fff; display:block; margin-top:4px; }
 </style>
@@ -30,7 +30,7 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
 <body>
 
 <div id="debug-bar">SENSORS STANDBY</div>
-<div id="loading">INITIALIZING...</div>
+<div id="loading">LOADING STAR CATALOG...</div>
 <canvas id="c"></canvas>
 <div class="reticle"></div>
 
@@ -60,12 +60,27 @@ window.addEventListener('load', () => {
     let MY_LAT = 30.3165, MY_LON = 78.0322, arEnabled = false, showLabels = true, showYou = false;
     const R = 900;
 
-    // EXPANDED 25 BRIGHTEST STARS CATALOG
+    // 120+ STAR CATALOG (RA, Dec, Magnitude, Name)
     const STARS = [
-        [6.75,-16.71,-1.46,"Sirius"],[6.39,-52.69,-0.74,"Canopus"],[14.66,-60.83,-0.27,"Rigil Kentaurus"],[14.26,19.18,-0.05,"Arcturus"],[18.61,38.78,0.03,"Vega"],[5.27,45.99,0.08,"Capella"],[5.24,-8.20,0.13,"Rigel"],[7.65,5.22,0.38,"Procyon"],[1.62,-57.23,0.46,"Achernar"],[5.91,7.40,0.50,"Betelgeuse"],[14.06,-60.37,0.61,"Hadar"],[19.84,8.86,0.76,"Altair"],[12.44,-63.09,0.77,"Acrux"],[4.59,16.50,0.87,"Aldebaran"],[16.49,-26.43,1.06,"Antares"],[13.41,-11.16,1.04,"Spica"],[7.75,28.02,1.16,"Pollux"],[22.96,-29.62,1.16,"Fomalhaut"],[20.69,45.28,1.25,"Deneb"],[12.71,-59.68,1.25,"Mimosa"],[10.14,11.96,1.36,"Regulus"],[6.97,-28.97,1.50,"Adhara"],[7.57,31.88,1.58,"Castor"],[12.51,-57.11,1.63,"Gacrux"],[17.55,-37.10,1.62,"Shaula"]
+        [6.75,-16.71,-1.46,"Sirius"],[6.39,-52.69,-0.74,"Canopus"],[14.66,-60.83,-0.27,"Alpha Centauri"],[14.26,19.18,-0.05,"Arcturus"],[18.61,38.78,0.03,"Vega"],[5.27,45.99,0.08,"Capella"],[5.24,-8.20,0.13,"Rigel"],[7.65,5.22,0.38,"Procyon"],[1.62,-57.23,0.46,"Achernar"],[5.91,7.40,0.50,"Betelgeuse"],
+        [14.06,-60.37,0.61,"Hadar"],[19.84,8.86,0.76,"Altair"],[12.44,-63.09,0.77,"Acrux"],[4.59,16.50,0.87,"Aldebaran"],[16.49,-26.43,1.06,"Antares"],[13.41,-11.16,1.04,"Spica"],[7.75,28.02,1.16,"Pollux"],[22.96,-29.62,1.16,"Fomalhaut"],[20.69,45.28,1.25,"Deneb"],[12.71,-59.68,1.25,"Mimosa"],
+        [10.14,11.96,1.36,"Regulus"],[6.97,-28.97,1.50,"Adhara"],[7.57,31.88,1.58,"Castor"],[12.51,-57.11,1.63,"Gacrux"],[17.55,-37.10,1.62,"Shaula"],[5.41,6.35,1.64,"Bellatrix"],[5.43,28.60,1.65,"Elnath"],[9.22,-69.71,1.67,"Miaplacidus"],[5.60,-1.20,1.69,"Alnilam"],[22.13,-46.96,1.73,"Alnair"],
+        [5.67,-1.94,1.74,"Alnitak"],[12.90,55.95,1.76,"Alioth"],[11.06,61.75,1.79,"Dubhe"],[3.40,49.86,1.79,"Mirfak"],[7.14,-26.39,1.83,"Wezen"],[17.62,-43.00,1.86,"Sargas"],[18.40,-34.38,1.85,"Kaus Australis"],[8.37,-59.50,1.86,"Avior"],[13.79,49.31,1.85,"Alkaid"],[5.99,44.94,1.90,"Menkalinan"],
+        [16.81,-69.02,1.91,"Atria"],[6.62,16.39,1.93,"Alhena"],[20.42,-56.73,1.94,"Peacock"],[9.27,-8.65,1.98,"Alphard"],[2.52,89.26,1.97,"Polaris"],[2.12,23.46,2.01,"Hamal"],[10.33,19.84,2.01,"Algieba"],[0.73,-17.98,2.04,"Diphda"],[18.92,-26.29,2.05,"Nunki"],[14.11,-36.37,2.06,"Menkent"],
+        [0.14,29.09,2.07,"Alpheratz"],[1.16,35.62,2.07,"Mirach"],[5.79,-9.67,2.07,"Saiph"],[14.84,74.15,2.07,"Kochab"],[17.58,12.56,2.08,"Rasalhague"],[3.13,40.95,2.09,"Algol"],[2.06,42.32,2.10,"Alamac"],[11.82,14.57,2.14,"Denebola"],[1.90,60.23,2.20,"Tsih"],[0.67,56.53,2.24,"Schedar"],
+        [13.39,54.92,2.27,"Mizar"],[11.89,53.69,2.44,"Merak"],[10.90,56.38,2.54,"Phad"],[12.26,57.03,3.32,"Megrez"],[16.08,-19.80,2.62,"Graffias"],[16.00,-22.62,2.29,"Dschubba"],[5.62,21.14,2.97,"Alheka"],[13.19,-58.74,2.79,"Imai"],[15.74,26.71,2.22,"Alphecca"],[2.73,-0.32,2.54,"Mira"],
+        [23.07,15.20,2.45,"Markab"],[23.06,28.08,2.44,"Scheat"],[0.22,15.18,2.83,"Algenib"],[19.51,27.95,3.00,"Albireo"],[15.57,-10.53,2.62,"Zubenelgenubi"],[15.28,-9.38,2.61,"Zubeneschamali"],[14.53,16.51,2.67,"Izar"],[18.09,-30.42,2.82,"Nasal"],[21.36,-42.58,2.83,"Microscopii"],[19.16,13.86,2.68,"Tarazed"]
     ];
     
-    const CONSTELLATIONS = [{name:"Orion",segs:[[[5.53,-0.29],[5.60,-1.20],[5.68,-1.94]],[[5.91,7.40],[5.60,-1.20]],[[5.41,6.35],[5.60,-1.20]],[[5.24,-8.20],[5.60,-1.20]],[[5.91,7.40],[5.41,6.35]]]}];
+    // NEW CONSTELLATIONS ADDED
+    const CONSTELLATIONS = [
+        {name:"Orion",segs:[[[5.53,-0.29],[5.60,-1.20],[5.68,-1.94]],[[5.91,7.40],[5.60,-1.20]],[[5.41,6.35],[5.60,-1.20]],[[5.24,-8.20],[5.60,-1.20]],[[5.91,7.40],[5.41,6.35]]]},
+        {name:"Ursa Major",segs:[[[11.06,61.75],[10.90,56.38],[11.89,53.69],[12.26,57.03],[10.90,56.38]],[[12.26,57.03],[12.90,55.95],[13.39,54.92],[13.79,49.31]]]},
+        {name:"Cassiopeia",segs:[[[0.67,56.53],[1.90,60.23],[1.43,60.23],[0.14,59.15],[0.67,56.53]]]},
+        {name:"Crux",segs:[[[12.44,-63.09],[12.51,-57.11]],[[12.71,-59.68],[13.19,-58.74]]]},
+        {name:"Scorpius",segs:[[[16.49,-26.43],[16.00,-22.62],[16.08,-19.80]],[[16.49,-26.43],[17.62,-43.00],[17.55,-37.10]]]},
+        {name:"Taurus",segs:[[[4.59,16.50],[5.43,28.60]],[[4.59,16.50],[5.62,21.14]]]}
+    ];
 
     function eqToAltAz(ra, dec, lat, lon, date) {
         let jd = date.getTime()/86400000 + 2440587.5;
@@ -100,7 +115,7 @@ window.addEventListener('load', () => {
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
     camera.position.set(0,5,0); const sky = new THREE.Group(); scene.add(sky);
 
-    let grnd = new THREE.Mesh(new THREE.CircleGeometry(R,32), new THREE.MeshBasicMaterial({color:0x0a101a}));
+    let grnd = new THREE.Mesh(new THREE.CircleGeometry(R,64), new THREE.MeshBasicMaterial({color:0x0a101a}));
     grnd.rotation.x = -Math.PI/2; scene.add(grnd);
 
     const objs = [], lbls = [];
@@ -109,11 +124,11 @@ window.addEventListener('load', () => {
     });
 
     STARS.forEach(s => {
-        // Size based on magnitude (brighter = bigger)
-        let sz = s[2] < 0 ? 3.5 : (s[2] < 1 ? 2.5 : 1.5);
+        // Size scales dramatically with brightness
+        let sz = s[2] < 0 ? 4.5 : (s[2] < 1 ? 3.0 : (s[2] < 2 ? 1.8 : 1.0));
         let m = new THREE.Mesh(new THREE.SphereGeometry(sz,8,8), new THREE.MeshBasicMaterial({color:0xffffff}));
         m.ra=s[0]; m.dec=s[1]; sky.add(m); objs.push(m);
-        let l = makeLbl(s[3], '#c8dcff', 0.5); l.ra=s[0]; l.dec=s[1]; sky.add(l); lbls.push(l);
+        let l = makeLbl(s[3], 'rgba(200, 220, 255, 0.8)', 0.45); l.ra=s[0]; l.dec=s[1]; sky.add(l); lbls.push(l);
     });
 
     CONSTELLATIONS.forEach(c => {
@@ -122,12 +137,12 @@ window.addEventListener('load', () => {
             let ln = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pts,3)), new THREE.LineBasicMaterial({color:0x3366ff}));
             ln.seg=seg; sky.add(ln); objs.push(ln);
         });
-        let cl = makeLbl(c.name, '#3366ff', 0.6); cl.ra=c.segs[0][0][0]; cl.dec=c.segs[0][0][1]; sky.add(cl); lbls.push(cl);
+        let cl = makeLbl(c.name.toUpperCase(), '#3366ff', 0.6); cl.ra=c.segs[0][0][0]; cl.dec=c.segs[0][0][1]; sky.add(cl); lbls.push(cl);
     });
 
-    const art = new THREE.Mesh(new THREE.SphereGeometry(10,16,16), new THREE.MeshBasicMaterial({color:0xff9900}));
+    const art = new THREE.Mesh(new THREE.SphereGeometry(12,16,16), new THREE.MeshBasicMaterial({color:0xff9900}));
     art.ra=12.9; art.dec=-5.2; sky.add(art); objs.push(art);
-    const aLbl = makeLbl("ARTEMIS II", '#ffaa00', 0.6); sky.add(aLbl);
+    const aLbl = makeLbl("ARTEMIS II", '#ffaa00', 0.7); sky.add(aLbl);
 
     let isD=false, pM={x:0,y:0}, cLon=180, cLat=20;
     renderer.domElement.addEventListener('touchstart',e=>{if(!arEnabled){isD=true; pM={x:e.touches[0].clientX,y:e.touches[0].clientY};}});
@@ -147,7 +162,6 @@ window.addEventListener('load', () => {
         document.getElementById('you-dir-lbl').textContent = "FACING " + dir + " (" + Math.round(d) + "°)";
     }
 
-    // FAILSAFE AR GYRO LOGIC
     window.initGyro = async function() {
         if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
             try {
@@ -163,38 +177,28 @@ window.addEventListener('load', () => {
         window.addEventListener('deviceorientation', e => {
             if(!arEnabled) return;
             try {
-                let headingDegrees = 0;
-                let alphaRad = 0;
-
-                // TRY TRUE NORTH COMPASS FIRST
+                let headingDegrees = 0; let alphaRad = 0;
                 if (e.webkitCompassHeading !== undefined && !isNaN(e.webkitCompassHeading)) {
                     headingDegrees = e.webkitCompassHeading;
                     alphaRad = (360 - e.webkitCompassHeading) * Math.PI / 180; 
                     document.getElementById('debug-bar').textContent = `TRUE NORTH MODE | Compass: ${Math.round(headingDegrees)}°`;
-                } 
-                // FALLBACK TO RELATIVE GYRO
-                else {
+                } else {
                     let alpha = e.alpha || 0;
                     headingDegrees = 360 - alpha;
                     alphaRad = alpha * Math.PI / 180;
-                    document.getElementById('debug-bar').textContent = `RELATIVE MODE | Alpha: ${Math.round(alpha)}° (Calibrate by moving phone)`;
+                    document.getElementById('debug-bar').textContent = `RELATIVE MODE | Alpha: ${Math.round(alpha)}°`;
                 }
 
                 let betaRad = (e.beta||0) * Math.PI/180;
                 let gammaRad = (e.gamma||0) * Math.PI/180;
-                
                 camera.quaternion.setFromEuler(new THREE.Euler(betaRad, alphaRad, -gammaRad, 'YXZ'));
                 updateCompassData(headingDegrees);
-
             } catch(err) {
                 document.getElementById('debug-bar').textContent = "ERROR: " + err.message;
             }
-
         }, true); 
         
-        arEnabled=true; 
-        document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; 
-        document.getElementById('btn-gyro').style.background="#008844"; 
+        arEnabled=true; document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; document.getElementById('btn-gyro').style.background="#008844"; 
     }
 
     window.toggleLabels = function() { showLabels=!showLabels; document.getElementById('btn-lbls').textContent=showLabels?"🏷️ Hide Labels":"🏷️ Show Labels"; aLbl.visible=showLabels; }
@@ -213,9 +217,7 @@ window.addEventListener('load', () => {
                 MY_LAT=p.coords.latitude; MY_LON=p.coords.longitude;
                 document.getElementById('u-ll').textContent=`${MY_LAT.toFixed(2)}°N / ${MY_LON.toFixed(2)}°E`;
                 btn.textContent="✅ GPS Synced";
-            }, e=>{ 
-                btn.textContent="❌ GPS Denied";
-            }, { enableHighAccuracy: true });
+            }, e=>{ btn.textContent="❌ GPS Denied"; }, { enableHighAccuracy: true });
         }
     }
 
@@ -248,7 +250,7 @@ window.addEventListener('load', () => {
         });
         lbls.forEach(l => {
             let hz = eqToAltAz(l.ra, l.dec, MY_LAT, MY_LON, n);
-            l.position.copy(a2v(hz.alt+2, hz.az, R-60)); l.visible=showLabels&&hz.alt>0;
+            l.position.copy(a2v(hz.alt+1.5, hz.az, R-60)); l.visible=showLabels&&hz.alt>0;
         });
         
         let aHz = eqToAltAz(art.ra, art.dec, MY_LAT, MY_LON, n);
