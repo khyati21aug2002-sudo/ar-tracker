@@ -3,20 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AR Sky Tracker - Compass Debugger</title>
+<title>AR Sky Tracker - Pro Edition</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
 body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; -webkit-user-select:none; }
 canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1; }
 
-/* HARDWARE DEBUGGER */
-#debug-bar { position:fixed; top:env(safe-area-inset-top, 0px); left:0; width:100%; background:rgba(255,0,0,0.8); color:#fff; font-size:11px; font-weight:bold; text-align:center; padding:4px; z-index:500; letter-spacing:1px; }
+#debug-bar { position:fixed; top:env(safe-area-inset-top, 0px); left:0; width:100%; background:rgba(40,40,40,0.9); color:#00ff88; font-size:11px; font-weight:bold; text-align:center; padding:6px; z-index:500; letter-spacing:1px; border-bottom: 1px solid #00ff88;}
 
 .panel { position:fixed; background:rgba(0,10,30,0.9); border:1px solid rgba(0,180,255,0.22); border-radius:12px; padding:12px 16px; z-index:100; min-width:220px; }
 .panel h1 { font-size:11px; letter-spacing:2px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(0,180,255,0.18); color:#ff9900; }
 .row { display:flex; justify-content:space-between; padding:4px 0; font-size:10px; }
 .lbl { color:#3d7a9a; } .val { color:#eee; font-weight:bold; }
-#pa { top:env(safe-area-inset-top, 30px); left:15px; } /* Moved down to avoid debug bar */
+#pa { top:env(safe-area-inset-top, 35px); left:15px; }
 
 #controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:100; }
 .btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4); border-radius:10px; color:#fff; font-size:11px; padding:12px; cursor:pointer; }
@@ -30,7 +29,7 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
 </head>
 <body>
 
-<div id="debug-bar">HARDWARE SENSORS OFF</div>
+<div id="debug-bar">SENSORS STANDBY</div>
 <div id="loading">INITIALIZING...</div>
 <canvas id="c"></canvas>
 <div class="reticle"></div>
@@ -44,6 +43,8 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
   <div class="row"><span class="lbl">ALTITUDE</span><span class="val" id="a-alt">--</span></div>
   <div class="row"><span class="lbl">AZIMUTH</span><span class="val" id="a-az">--</span></div>
 </div>
+
+<div id="compass">HEADING: <span id="comp-dir">NORTH</span></div>
 
 <div id="controls">
     <button class="btn" onclick="toggleYou()" id="btn-you">👤 Show "YOU" Dir</button>
@@ -59,7 +60,11 @@ window.addEventListener('load', () => {
     let MY_LAT = 30.3165, MY_LON = 78.0322, arEnabled = false, showLabels = true, showYou = false;
     const R = 900;
 
-    const STARS = [[6.75,-16.71,-1.46,"Sirius"],[14.26,19.18,-0.05,"Arcturus"],[18.61,38.78,0.03,"Vega"],[5.27,45.99,0.08,"Capella"],[5.24,-8.20,0.13,"Rigel"],[7.65,5.22,0.38,"Procyon"],[5.91,7.40,0.50,"Betelgeuse"],[19.84,8.86,0.76,"Altair"]];
+    // EXPANDED 25 BRIGHTEST STARS CATALOG
+    const STARS = [
+        [6.75,-16.71,-1.46,"Sirius"],[6.39,-52.69,-0.74,"Canopus"],[14.66,-60.83,-0.27,"Rigil Kentaurus"],[14.26,19.18,-0.05,"Arcturus"],[18.61,38.78,0.03,"Vega"],[5.27,45.99,0.08,"Capella"],[5.24,-8.20,0.13,"Rigel"],[7.65,5.22,0.38,"Procyon"],[1.62,-57.23,0.46,"Achernar"],[5.91,7.40,0.50,"Betelgeuse"],[14.06,-60.37,0.61,"Hadar"],[19.84,8.86,0.76,"Altair"],[12.44,-63.09,0.77,"Acrux"],[4.59,16.50,0.87,"Aldebaran"],[16.49,-26.43,1.06,"Antares"],[13.41,-11.16,1.04,"Spica"],[7.75,28.02,1.16,"Pollux"],[22.96,-29.62,1.16,"Fomalhaut"],[20.69,45.28,1.25,"Deneb"],[12.71,-59.68,1.25,"Mimosa"],[10.14,11.96,1.36,"Regulus"],[6.97,-28.97,1.50,"Adhara"],[7.57,31.88,1.58,"Castor"],[12.51,-57.11,1.63,"Gacrux"],[17.55,-37.10,1.62,"Shaula"]
+    ];
+    
     const CONSTELLATIONS = [{name:"Orion",segs:[[[5.53,-0.29],[5.60,-1.20],[5.68,-1.94]],[[5.91,7.40],[5.60,-1.20]],[[5.41,6.35],[5.60,-1.20]],[[5.24,-8.20],[5.60,-1.20]],[[5.91,7.40],[5.41,6.35]]]}];
 
     function eqToAltAz(ra, dec, lat, lon, date) {
@@ -104,7 +109,9 @@ window.addEventListener('load', () => {
     });
 
     STARS.forEach(s => {
-        let m = new THREE.Mesh(new THREE.SphereGeometry(3,8,8), new THREE.MeshBasicMaterial({color:0xffffff}));
+        // Size based on magnitude (brighter = bigger)
+        let sz = s[2] < 0 ? 3.5 : (s[2] < 1 ? 2.5 : 1.5);
+        let m = new THREE.Mesh(new THREE.SphereGeometry(sz,8,8), new THREE.MeshBasicMaterial({color:0xffffff}));
         m.ra=s[0]; m.dec=s[1]; sky.add(m); objs.push(m);
         let l = makeLbl(s[3], '#c8dcff', 0.5); l.ra=s[0]; l.dec=s[1]; sky.add(l); lbls.push(l);
     });
@@ -136,50 +143,59 @@ window.addEventListener('load', () => {
     function updateCompassData(degrees) {
         let d = (degrees%360+360)%360, dir="NORTH";
         if(d>45&&d<=135) dir="EAST"; else if(d>135&&d<=225) dir="SOUTH"; else if(d>225&&d<=315) dir="WEST";
+        document.getElementById('comp-dir').textContent=dir;
         document.getElementById('you-dir-lbl').textContent = "FACING " + dir + " (" + Math.round(d) + "°)";
     }
 
-    // AR GYRO LOGIC REWRITTEN FOR iOS COMPASS
+    // FAILSAFE AR GYRO LOGIC
     window.initGyro = async function() {
         if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
             try {
                 if(await DeviceOrientationEvent.requestPermission() === 'granted') {
-                    document.getElementById('debug-bar').style.background = "rgba(0,150,255,0.8)";
-                    document.getElementById('debug-bar').textContent = "WAITING FOR SENSOR DATA...";
+                    document.getElementById('debug-bar').textContent = "ACCESS GRANTED. WAITING FOR DATA...";
                     startGyro();
                 } else { alert("Permission Denied."); }
             }catch(e){alert("Gyro error");}
         } else startGyro();
     }
     
-    function startGyro(){ window.addEventListener('deviceorientation',e=>{
-        if(!arEnabled) return;
+    function startGyro() { 
+        window.addEventListener('deviceorientation', e => {
+            if(!arEnabled) return;
+            try {
+                let headingDegrees = 0;
+                let alphaRad = 0;
+
+                // TRY TRUE NORTH COMPASS FIRST
+                if (e.webkitCompassHeading !== undefined && !isNaN(e.webkitCompassHeading)) {
+                    headingDegrees = e.webkitCompassHeading;
+                    alphaRad = (360 - e.webkitCompassHeading) * Math.PI / 180; 
+                    document.getElementById('debug-bar').textContent = `TRUE NORTH MODE | Compass: ${Math.round(headingDegrees)}°`;
+                } 
+                // FALLBACK TO RELATIVE GYRO
+                else {
+                    let alpha = e.alpha || 0;
+                    headingDegrees = 360 - alpha;
+                    alphaRad = alpha * Math.PI / 180;
+                    document.getElementById('debug-bar').textContent = `RELATIVE MODE | Alpha: ${Math.round(alpha)}° (Calibrate by moving phone)`;
+                }
+
+                let betaRad = (e.beta||0) * Math.PI/180;
+                let gammaRad = (e.gamma||0) * Math.PI/180;
+                
+                camera.quaternion.setFromEuler(new THREE.Euler(betaRad, alphaRad, -gammaRad, 'YXZ'));
+                updateCompassData(headingDegrees);
+
+            } catch(err) {
+                document.getElementById('debug-bar').textContent = "ERROR: " + err.message;
+            }
+
+        }, true); 
         
-        // Debug readout
-        let wCH = e.webkitCompassHeading !== undefined ? Math.round(e.webkitCompassHeading) : 'N/A';
-        let alp = e.alpha !== null ? Math.round(e.alpha) : 'N/A';
-        document.getElementById('debug-bar').textContent = `wCH (True North): ${wCH} | Alpha: ${alp} | Beta: ${Math.round(e.beta||0)}`;
-
-        // THE MATH: If wCH is available, use it. Otherwise, fallback to alpha.
-        let headingDegrees = 0;
-        let alphaRad = 0;
-
-        if (e.webkitCompassHeading !== undefined) {
-            headingDegrees = e.webkitCompassHeading;
-            // ThreeJS rotates counter-clockwise. wCH is clockwise.
-            alphaRad = (360 - e.webkitCompassHeading) * Math.PI / 180; 
-        } else {
-            headingDegrees = 360 - (e.alpha || 0);
-            alphaRad = (e.alpha || 0) * Math.PI / 180;
-        }
-
-        let betaRad = (e.beta||0)*Math.PI/180;
-        let gammaRad = (e.gamma||0)*Math.PI/180;
-        
-        camera.quaternion.setFromEuler(new THREE.Euler(betaRad, alphaRad, -gammaRad, 'YXZ'));
-        updateCompassData(headingDegrees);
-
-    }, true); arEnabled=true; document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; document.getElementById('btn-gyro').style.background="#008844"; }
+        arEnabled=true; 
+        document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; 
+        document.getElementById('btn-gyro').style.background="#008844"; 
+    }
 
     window.toggleLabels = function() { showLabels=!showLabels; document.getElementById('btn-lbls').textContent=showLabels?"🏷️ Hide Labels":"🏷️ Show Labels"; aLbl.visible=showLabels; }
     
