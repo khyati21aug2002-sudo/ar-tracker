@@ -4,31 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>AR Sky Tracker</title>
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
 body { background:#000; overflow:hidden; font-family:'Courier New',monospace; color:#fff; user-select:none; -webkit-user-select:none; }
 canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1; }
-.panel { position:fixed; background:rgba(0,10,30,0.9); border:1px solid rgba(0,180,255,0.22); border-radius:12px; padding:12px 16px; box-shadow:0 0 20px rgba(0,80,200,0.14); z-index:100; min-width:220px; }
+.panel { position:fixed; background:rgba(0,10,30,0.9); border:1px solid rgba(0,180,255,0.22); border-radius:12px; padding:12px 16px; z-index:100; min-width:220px; }
 .panel h1 { font-size:11px; letter-spacing:2px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(0,180,255,0.18); color:#ff9900; }
 .row { display:flex; justify-content:space-between; padding:4px 0; font-size:10px; }
 .lbl { color:#3d7a9a; } .val { color:#eee; font-weight:bold; }
 #pa { top:env(safe-area-inset-top, 20px); left:15px; }
 #controls { position:fixed; bottom:30px; right:15px; display:flex; flex-direction:column; gap:8px; z-index:100; }
-.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4); border-radius:10px; color:#fff; font-size:11px; padding:12px; cursor:pointer; text-align:center; }
+.btn { background:rgba(0,25,60,0.95); border:1px solid rgba(0,180,255,0.4); border-radius:10px; color:#fff; font-size:11px; padding:12px; cursor:pointer; }
 .btn-ar { background:#004488; border-color:#00eeff; font-weight:bold; }
 #compass { position:fixed; top:15px; left:50%; transform:translateX(-50%); font-size:12px; letter-spacing:3px; color:#00eeff; z-index:100; text-shadow:0 0 5px #000; }
 .reticle { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:40px; height:40px; border:1px solid rgba(0,238,255,0.3); pointer-events:none; z-index:100; }
 #loading { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); color:#00eeff; font-size:14px; z-index:50; }
-
-/* The New 'YOU' Indicator HUD */
-#you-hud {
-    display: none; position: fixed; top: 40%; left: 50%; transform: translateX(-50%);
-    text-align: center; color: #00ff88; font-weight: bold; font-size: 18px;
-    text-shadow: 0 0 10px #000; pointer-events: none; z-index: 100;
-}
-#you-dir-lbl { font-size: 12px; color: #fff; margin-top: 4px; display:block;}
+#you-hud { display:none; position:fixed; top:40%; left:50%; transform:translateX(-50%); text-align:center; color:#00ff88; font-weight:bold; font-size:18px; text-shadow:0 0 10px #000; z-index:100; pointer-events:none;}
+#you-dir-lbl { font-size:12px; color:#fff; display:block; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -36,11 +28,7 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
 <canvas id="c"></canvas>
 <div class="reticle"></div>
 
-<div id="you-hud">
-    👤 YOU<br>
-    <span id="you-dir-lbl">FACING NORTH</span><br>
-    ⬇
-</div>
+<div id="you-hud">👤 YOU<br><span id="you-dir-lbl">FACING NORTH</span><br>⬇</div>
 
 <div class="panel" id="pa">
   <h1>📡 AR SKY TRACKER</h1>
@@ -54,7 +42,7 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
 <div id="compass">HEADING: <span id="comp-dir">NORTH</span></div>
 
 <div id="controls">
-    <button class="btn" onclick="toggleYou()" id="btn-you">👤 Show "YOU" Indicator</button>
+    <button class="btn" onclick="toggleYou()" id="btn-you">👤 Show "YOU" Dir</button>
     <button class="btn" onclick="getLocation()" id="btn-gps">📍 Sync Phone GPS</button>
     <button class="btn" onclick="toggleLabels()" id="btn-lbls">🏷️ Hide Labels</button>
     <button class="btn btn-ar" onclick="initGyro()" id="btn-gyro">📳 Enable AR (Gyro)</button>
@@ -64,7 +52,6 @@ canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:1;
 <script>
 window.addEventListener('load', () => {
     document.getElementById('loading').style.display = 'none';
-
     let MY_LAT = 30.3165, MY_LON = 78.0322, arEnabled = false, showLabels = true, showYou = false;
     const R = 900;
 
@@ -149,6 +136,7 @@ window.addEventListener('load', () => {
         document.getElementById('you-dir-lbl').textContent = "FACING " + dir;
     }
 
+    // AR GYRO LOGIC (WITH iOS WEBKIT COMPASS FIX)
     window.initGyro = async function() {
         if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
             try {
@@ -159,10 +147,17 @@ window.addEventListener('load', () => {
     
     function startGyro(){ window.addEventListener('deviceorientation',e=>{
         if(!arEnabled) return;
-        let al=e.alpha?e.alpha*Math.PI/180:0, b=e.beta?e.beta*Math.PI/180:0, g=e.gamma?e.gamma*Math.PI/180:0;
-        camera.quaternion.setFromEuler(new THREE.Euler(b,al,-g,'YXZ'));
-        updateCompassData(360-e.alpha);
-    }); arEnabled=true; document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; document.getElementById('btn-gyro').style.background="#008844"; }
+        
+        // Find True North: Use Apple's webkitCompassHeading if available, otherwise fallback
+        let heading = e.webkitCompassHeading ? e.webkitCompassHeading : (360 - (e.alpha || 0));
+        let alphaRad = e.webkitCompassHeading ? (360 - e.webkitCompassHeading) * Math.PI/180 : (e.alpha||0)*Math.PI/180;
+        let betaRad = (e.beta||0)*Math.PI/180;
+        let gammaRad = (e.gamma||0)*Math.PI/180;
+        
+        camera.quaternion.setFromEuler(new THREE.Euler(betaRad, alphaRad, -gammaRad, 'YXZ'));
+        updateCompassData(heading);
+
+    }, true); arEnabled=true; document.getElementById('btn-gyro').textContent="✅ AR ACTIVE"; document.getElementById('btn-gyro').style.background="#008844"; }
 
     window.toggleLabels = function() { showLabels=!showLabels; document.getElementById('btn-lbls').textContent=showLabels?"🏷️ Hide Labels":"🏷️ Show Labels"; aLbl.visible=showLabels; }
     
@@ -176,17 +171,14 @@ window.addEventListener('load', () => {
         let btn = document.getElementById('btn-gps');
         btn.textContent="⏳ Locating...";
         if(navigator.geolocation) {
-            // Force high accuracy to prevent iOS silent timeouts
             navigator.geolocation.getCurrentPosition(p=>{
                 MY_LAT=p.coords.latitude; MY_LON=p.coords.longitude;
                 document.getElementById('u-ll').textContent=`${MY_LAT.toFixed(2)}°N / ${MY_LON.toFixed(2)}°E`;
                 btn.textContent="✅ GPS Synced";
             }, e=>{ 
-                btn.textContent="❌ GPS Failed";
-                alert("GPS Error: " + e.message + "\n\nMake sure your phone's Location Services are ON for Safari and you are on a secure HTTPS link.");
-            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-        } else {
-            alert("Location not supported.");
+                btn.textContent="❌ GPS Denied";
+                alert("GPS failed. Check iOS Settings > Safari > Location.");
+            }, { enableHighAccuracy: true });
         }
     }
 
